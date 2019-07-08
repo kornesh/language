@@ -1277,7 +1277,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
   all_candidates = candidates_dict.items()
   example_ids = tf.to_int32(np.array([int(k) for k, _ in all_candidates
                                      ])).eval(session=sess)
-  examples_by_id = zip(example_ids, all_candidates)
+  examples_by_id = list(zip(example_ids, all_candidates))
 
   # Cast unique_id also to int32 for features.
   feature_ids = []
