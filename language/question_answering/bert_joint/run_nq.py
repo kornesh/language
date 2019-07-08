@@ -1286,7 +1286,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
     feature_ids.append(f.features.feature["unique_ids"].int64_list.value[0] + 1)
     features.append(f.features.feature)
   feature_ids = tf.to_int32(np.array(feature_ids)).eval(session=sess)
-  features_by_id = zip(feature_ids, features)
+  features_by_id = list(zip(feature_ids, features))
 
   # Join examplew with features and raw results.
   examples = []
