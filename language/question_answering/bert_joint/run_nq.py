@@ -875,7 +875,7 @@ def read_nq_examples(input_file, is_training):
   examples = []
   for entry in input_data:
     examples.extend(read_nq_entry(entry, is_training))
-  return examples[0:100]
+  return examples
 
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
