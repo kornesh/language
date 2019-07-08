@@ -875,7 +875,7 @@ def read_nq_examples(input_file, is_training):
   examples = []
   for entry in input_data:
     examples.extend(read_nq_entry(entry, is_training))
-  return examples[:1000]
+  return examples
 
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
@@ -1236,7 +1236,7 @@ def compute_predictions(example):
         score = summary.short_span_score - summary.cls_token_score
         predictions.append((score, summary, start_span, end_span))
 
-  score, summary, start_span, end_span = sorted(predictions, reverse=True)[0]
+  score, summary, start_span, end_span = sorted(predictions, key=lambda x: x[0], reverse=True)[0]
   short_span = Span(start_span, end_span)
   long_span = Span(-1, -1)
   for c in example.candidates:
