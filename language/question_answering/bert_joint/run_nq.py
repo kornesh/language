@@ -1473,7 +1473,7 @@ def main(_):
     ]
     nq_pred_dict = compute_pred_dict(candidates_dict, eval_features,
                                      [r._asdict() for r in all_results])
-    predictions_json = {"predictions": nq_pred_dict.values()}
+    predictions_json = {"predictions": list(nq_pred_dict.values())}
     with tf.gfile.Open(FLAGS.output_prediction_file, "w") as f:
       json.dump(predictions_json, f, indent=4)
 
