@@ -1271,8 +1271,8 @@ def compute_predictions(example):
 def compute_pred_dict(candidates_dict, dev_features, raw_results):
   """Computes official answer key from raw logits."""
   raw_results_by_id = [(int(res["unique_id"] + 1), res) for res in raw_results]
-  print("raw_results", raw_results)
-  print("raw_results_by_id", raw_results_by_id)
+  # print("raw_results", raw_results)
+  # print("raw_results_by_id", raw_results_by_id)
 
   # Cast example id to int32 for each example, similarly to the raw results.
   sess = tf.Session()
@@ -1280,7 +1280,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
   example_ids = tf.to_int32(np.array([int(k) for k, _ in all_candidates
                                      ])).eval(session=sess)
   examples_by_id = list(zip(example_ids, all_candidates))
-  print("examples_by_id", examples_by_id)
+  # print("examples_by_id", examples_by_id)
 
   # Cast unique_id also to int32 for features.
   feature_ids = []
@@ -1290,7 +1290,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
     features.append(f.features.feature)
   feature_ids = tf.to_int32(np.array(feature_ids)).eval(session=sess)
   features_by_id = list(zip(feature_ids, features))
-  print("features_by_id", features_by_id)
+  # print("features_by_id", features_by_id)
 
   # Join examplew with features and raw results.
   examples = []
