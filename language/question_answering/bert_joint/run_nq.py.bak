@@ -815,7 +815,7 @@ class CreateTFExampleFn(object):
             [input_feature.answer_type])
       else:
         token_map = [-1] * len(input_feature.input_ids)
-        for k, v in input_feature.token_to_orig_map.items():
+        for k, v in input_feature.token_to_orig_map.iteritems():
           token_map[k] = v
         features["token_map"] = create_int_feature(token_map)
 
@@ -1134,7 +1134,7 @@ class FeatureWriter(object):
       features["answer_types"] = create_int_feature([feature.answer_type])
     else:
       token_map = [-1] * len(feature.input_ids)
-      for k, v in feature.token_to_orig_map.items():
+      for k, v in feature.token_to_orig_map.iteritems():
         token_map[k] = v
       features["token_map"] = create_int_feature(token_map)
 
@@ -1205,7 +1205,7 @@ def compute_predictions(example):
   n_best_size = 10
   max_answer_length = 30
 
-  for unique_id, result in example.results.items():
+  for unique_id, result in example.results.iteritems():
     if unique_id not in example.features:
       raise ValueError("No feature found with unique_id:", unique_id)
     token_map = example.features[unique_id]["token_map"].int64_list.value
@@ -1276,7 +1276,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
 
   # Cast example id to int32 for each example, similarly to the raw results.
   sess = tf.Session()
-  all_candidates = candidates_dict.items()
+  all_candidates = candidates_dict.iteritems()
   example_ids = tf.to_int32(np.array([int(k) for k, _ in all_candidates
                                      ])).eval(session=sess)
   examples_by_id = list(zip(example_ids, all_candidates))
@@ -1294,7 +1294,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
 
   # Join examplew with features and raw results.
   examples = []
-  merged = sorted(examples_by_id + raw_results_by_id + features_by_id, key=lambda x: x[0])
+  merged = sorted(examples_by_id + raw_results_by_id + features_by_id)
   for idx, datum in merged:
     if isinstance(datum, tuple):
       examples.append(EvalExample(datum[0], datum[1]))
@@ -1440,7 +1440,7 @@ def main(_):
     tf.logging.info("  Num orig examples = %d", len(eval_examples))
     tf.logging.info("  Num split examples = %d", len(eval_features))
     tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
-    for spans, ids in num_spans_to_ids.items():
+    for spans, ids in num_spans_to_ids.iteritems():
       tf.logging.info("  Num split into %d = %d", spans, len(ids))
 
     predict_input_fn = input_fn_builder(
@@ -1473,7 +1473,7 @@ def main(_):
     ]
     nq_pred_dict = compute_pred_dict(candidates_dict, eval_features,
                                      [r._asdict() for r in all_results])
-    predictions_json = {"predictions": nq_pred_dict.values()}
+    predictions_json = {"predictions": list(nq_pred_dict.values())}
     with tf.gfile.Open(FLAGS.output_prediction_file, "w") as f:
       json.dump(predictions_json, f, indent=4)
 
