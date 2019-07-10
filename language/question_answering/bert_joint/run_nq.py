@@ -31,6 +31,7 @@ from bert import optimization
 from bert import tokenization
 import numpy as np
 import tensorflow as tf
+import sys
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -344,6 +345,7 @@ def candidates_iter(e):
 def create_example_from_jsonl(line):
   """Creates an NQ example from a given line of JSON."""
   e = json.loads(line, object_pairs_hook=collections.OrderedDict)
+  print(e)
   add_candidate_types_and_positions(e)
   annotation, annotated_idx, annotated_sa = get_first_annotation(e)
 
@@ -871,10 +873,12 @@ def read_nq_examples(input_file, is_training):
     with _open(path) as input_file:
       for line in input_file:
         input_data.append(create_example_from_jsonl(line))
+        break
 
   examples = []
   for entry in input_data:
     examples.extend(read_nq_entry(entry, is_training))
+  print("examples", examples)
   return examples
 
 
@@ -1067,6 +1071,8 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
     """Decodes a record to a TensorFlow example."""
     example = tf.parse_single_example(record, name_to_features)
 
+    print("parse_single_example", type(example))
+
     # tf.Example only supports tf.int64, but the TPU only supports tf.int32.
     # So cast all int64 to int32.
     for name in list(example.keys()):
@@ -1112,6 +1118,7 @@ class FeatureWriter(object):
     self.is_training = is_training
     self.num_features = 0
     self._writer = tf.python_io.TFRecordWriter(filename)
+    self.examples = []
 
   def process_feature(self, feature):
     """Write a InputFeature to the TFRecordWriter as a tf.train.Example."""
@@ -1139,6 +1146,9 @@ class FeatureWriter(object):
       features["token_map"] = create_int_feature(token_map)
 
     tf_example = tf.train.Example(features=tf.train.Features(feature=features))
+    self.examples.append(tf_example)
+    #print("tf_example", tf_example)
+    print("tf_example", type(tf_example.SerializeToString()))
     self._writer.write(tf_example.SerializeToString())
 
   def close(self):
@@ -1175,6 +1185,7 @@ def read_candidates_from_one_split(input_path):
     for line in input_file:
       e = json.loads(line)
       candidates_dict[e["example_id"]] = e["long_answer_candidates"]
+      break
   return candidates_dict
 
 
@@ -1206,11 +1217,14 @@ def compute_predictions(example):
   max_answer_length = 30
 
   for unique_id, result in example.results.items():
+    print("compute_predictions", unique_id, result)
     if unique_id not in example.features:
       raise ValueError("No feature found with unique_id:", unique_id)
     token_map = example.features[unique_id]["token_map"].int64_list.value
     start_indexes = get_best_indexes(result["start_logits"], n_best_size)
     end_indexes = get_best_indexes(result["end_logits"], n_best_size)
+    print("start_indexes", start_indexes)
+    print("end_indexes", end_indexes)
     for start_index in start_indexes:
       for end_index in end_indexes:
         if end_index < start_index:
@@ -1235,8 +1249,14 @@ def compute_predictions(example):
         # Span logits minus the cls logits seems to be close to the best.
         score = summary.short_span_score - summary.cls_token_score
         predictions.append((score, summary, start_span, end_span))
+        print("\t\tstart_span", start_span)
+        print("\t\tend_span", end_span)
+        print("\t\tscore", score)
+        #print((score, summary, start_span, end_span))
 
-  score, summary, start_span, end_span = sorted(predictions, key=lambda x: x[0], reverse=True)[0]
+  k = sorted(predictions, key=lambda x: x[0], reverse=True)
+  print(k)
+  score, summary, start_span, end_span = k[0]
   short_span = Span(start_span, end_span)
   long_span = Span(-1, -1)
   for c in example.candidates:
@@ -1269,6 +1289,7 @@ def compute_predictions(example):
 
 
 def compute_pred_dict(candidates_dict, dev_features, raw_results):
+  #print(candidates_dict, dev_features, raw_results)
   """Computes official answer key from raw logits."""
   raw_results_by_id = [(int(res["unique_id"] + 1), res) for res in raw_results]
   # print("raw_results", raw_results)
@@ -1288,20 +1309,29 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
   for f in dev_features:
     feature_ids.append(f.features.feature["unique_ids"].int64_list.value[0] + 1)
     features.append(f.features.feature)
+    print("feature_ids", f.features.feature["unique_ids"].int64_list.value[0] + 1)
+    print("features", f.features.feature)
   feature_ids = tf.to_int32(np.array(feature_ids)).eval(session=sess)
   features_by_id = list(zip(feature_ids, features))
   # print("features_by_id", features_by_id)
-
+  print("raw_results_by_id", len(raw_results_by_id), "examples_by_id", len(examples_by_id), "features_by_id", len(features_by_id))
   # Join examplew with features and raw results.
   examples = []
   merged = sorted(examples_by_id + raw_results_by_id + features_by_id, key=lambda x: x[0])
+  #print("merged", examples_by_id)
+  #print("features_by_id", features_by_id)
+  #sys.exit(1)
   for idx, datum in merged:
     if isinstance(datum, tuple):
+      print("isinstance(datum, tuple)")
       examples.append(EvalExample(datum[0], datum[1]))
     elif "token_map" in datum:
+      print('"token_map" in datum:')
       examples[-1].features[idx] = datum
     else:
+      print("else")
       examples[-1].results[idx] = datum
+    #print("datum", idx, datum)
 
   # Construct prediction objects.
   tf.logging.info("Computing predictions...")
@@ -1436,6 +1466,13 @@ def main(_):
     eval_writer.close()
     eval_filename = eval_writer.filename
 
+
+
+    print("eval_features0", len(eval_features), type(eval_features[0]))
+
+    eval_features = eval_writer.examples
+    print("eval_features1", len(eval_features), type(eval_features[0]))
+
     tf.logging.info("***** Running predictions *****")
     tf.logging.info("  Num orig examples = %d", len(eval_examples))
     tf.logging.info("  Num split examples = %d", len(eval_features))
@@ -1453,8 +1490,8 @@ def main(_):
     all_results = []
     for result in estimator.predict(
         predict_input_fn, yield_single_examples=True):
-      if len(all_results) % 1000 == 0:
-        tf.logging.info("Processing example: %d" % (len(all_results)))
+      #if len(all_results) % 1000 == 0:
+      tf.logging.info("Processing example: %d" % (len(all_results)))
       unique_id = int(result["unique_ids"])
       start_logits = [float(x) for x in result["start_logits"].flat]
       end_logits = [float(x) for x in result["end_logits"].flat]
@@ -1467,10 +1504,16 @@ def main(_):
               answer_type_logits=answer_type_logits))
 
     candidates_dict = read_candidates(FLAGS.predict_file)
+    for r in all_results:
+      print(r._asdict())
+
+    '''
     eval_features = [
         tf.train.Example.FromString(r)
         for r in tf.python_io.tf_record_iterator(eval_filename)
     ]
+    '''
+    print("eval_features2", len(eval_features), type(eval_features[0]))
     nq_pred_dict = compute_pred_dict(candidates_dict, eval_features,
                                      [r._asdict() for r in all_results])
     predictions_json = {"predictions": list(nq_pred_dict.values())}
