@@ -21,6 +21,12 @@ def nq_tokenizer(text):
     tokens = tokenizer(text)
     for token in tokens:
         html_token = token.startswith('<')
+        clean = token.replace('<', '').replace('>', '').split(' ')[0].lower()
+        if html_token:
+            token = '<'+clean.title()+'>'
+            #print(token.title())
+        if token.startswith('<') and clean.replace('/', '') not in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'tr', 'td', 'table', 'th']:
+            continue
         t = NQToken(start_byte=0, end_byte=0, token=token, html_token=html_token)
         output.append(dict(t._asdict()))
     return output
