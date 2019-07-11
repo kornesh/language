@@ -66,7 +66,7 @@ def convert_question_to_nqexample(question, page):
                 continue
             if len(stack) != 0 and token == stack[-1][0]:
                 s  = stack.pop()
-                candidates.append({"start_token": s[1] , "top_level": not bool(stack), "start_byte": -1, "end_token": i, "end_byte": -1})
+                candidates.append({"start_token": s[1] , "top_level": not bool(stack), "start_byte": -1, "end_token": i + 1, "end_byte": -1})
                 #print(s[0], t['token'], "start_token", s[1], "end_token", i, "top_level", not bool(stack), "stack", stack)
             else:
                 stack.append((t['token'], i))
