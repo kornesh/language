@@ -25,7 +25,7 @@ def nq_tokenizer(text):
         if html_token:
             token = '<'+clean.title()+'>'
             #print(token.title())
-        if token.startswith('<') and clean.replace('/', '') not in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'tr', 'td', 'table', 'th']:
+        if token.startswith('<') and clean.replace('/', '') not in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'dl', 'ol', 'li', 'tr', 'td', 'table', 'th', 'dd', 'dt']:
             continue
         t = NQToken(start_byte=0, end_byte=0, token=token, html_token=html_token)
         output.append(dict(t._asdict()))
@@ -57,9 +57,19 @@ def convert_question_to_nqexample(question, page):
     doctokens = nq_tokenizer(page)
     candidates = []
 
-    for i in range(10):
-        rand = random.randint(10, len(doctokens)-10)    
-        candidates.append({"start_token": rand , "top_level": True, "start_byte": -1, "end_token": rand + 10, "end_byte": -1})
+    stack = []
+
+    for i, t in enumerate(doctokens):
+        if t['token'].startswith('<'):
+            token = t['token'].replace('/', '')
+            if token.replace('<', '').replace('>', '').lower() not in ['p', 'ul', 'dl', 'ol', 'li', 'tr', 'td', 'table', 'th', 'dd', 'dt']:
+                continue
+            if len(stack) != 0 and token == stack[-1][0]:
+                s  = stack.pop()
+                candidates.append({"start_token": s[1] , "top_level": not bool(stack), "start_byte": -1, "end_token": i, "end_byte": -1})
+                #print(s[0], t['token'], "start_token", s[1], "end_token", i, "top_level", not bool(stack), "stack", stack)
+            else:
+                stack.append((t['token'], i))
 
     e = NQExample(
         example_id=0,
