@@ -28,7 +28,7 @@ def nq_tokenizer(text):
         if token.startswith('<') and clean.replace('/', '') not in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'dl', 'ol', 'li', 'tr', 'td', 'table', 'th', 'dd', 'dt']:
             continue
         t = NQToken(start_byte=0, end_byte=0, token=token, html_token=html_token)
-        output.append(dict(t._asdict()))
+        output.append(t._asdict())
     return output
 
 NQExample = collections.namedtuple(
@@ -53,7 +53,7 @@ NQToken = collections.namedtuple(
         'end_byte'
     ])
 
-def convert_question_to_nqexample(question, page):
+def generate_nq_jsonl(question, page):
     doctokens = nq_tokenizer(page)
     candidates = []
     stack = []
@@ -65,7 +65,12 @@ def convert_question_to_nqexample(question, page):
                 continue
             if len(stack) != 0 and token == stack[-1][0]:
                 s  = stack.pop()
-                candidates.append({"start_token": s[1] , "top_level": not bool(stack), "start_byte": -1, "end_token": i + 1, "end_byte": -1})
+                candidates.append(collections.OrderedDict([
+                    ("start_token", s[1]),
+                    ("top_level", not bool(stack)),
+                    ("start_byte", -1),
+                    ("end_token", i + 1),
+                    ("end_byte", -1)]))
                 #print(s[0], t['token'], "start_token", s[1], "end_token", i, "top_level", not bool(stack), "stack", stack)
             else:
                 stack.append((t['token'], i))
@@ -81,7 +86,7 @@ def convert_question_to_nqexample(question, page):
         long_answer_candidates=candidates,
         annotations=[]
     )
-    return dict(e._asdict())
+    return e._asdict()
 
 
 if __name__ == '__main__':
@@ -104,6 +109,7 @@ if __name__ == '__main__':
     with open(args.page, 'r') as f:
         text = f.read()
 
-    data = convert_question_to_nqexample(args.question, text)
+    data = generate_nq_jsonl(args.question, text)
+    print(data)
     with open(args.output, 'w') as f:
-        json.dump(data, f)
+        json.dump(dict(data), f)
