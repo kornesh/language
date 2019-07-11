@@ -56,7 +56,6 @@ NQToken = collections.namedtuple(
 def convert_question_to_nqexample(question, page):
     doctokens = nq_tokenizer(page)
     candidates = []
-
     stack = []
 
     for i, t in enumerate(doctokens):
@@ -85,26 +84,26 @@ def convert_question_to_nqexample(question, page):
     return dict(e._asdict())
 
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--page',
+        type=str,
+        help='Ppge filename')
+    parser.add_argument(
+        '--question',
+        type=str,
+        help='Question text')
+    parser.add_argument(
+        '--output',
+        type=str,
+        help='output')
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    '--page',
-    type=str,
-    help='Ppge filename')
-parser.add_argument(
-    '--question',
-    type=str,
-    help='Question text')
-parser.add_argument(
-    '--output',
-    type=str,
-    help='output')
+    args = parser.parse_args()
 
-args = parser.parse_args()
+    with open(args.page, 'r') as f:
+        text = f.read()
 
-with open(args.page, 'r') as f:
-    text = f.read()
-
-data = convert_question_to_nqexample(args.question, text)
-with open(args.output, 'w') as f:
-    json.dump(data, f)
+    data = convert_question_to_nqexample(args.question, text)
+    with open(args.output, 'w') as f:
+        json.dump(data, f)

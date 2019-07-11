@@ -345,7 +345,7 @@ def candidates_iter(e):
 def create_example_from_jsonl(line):
   """Creates an NQ example from a given line of JSON."""
   e = json.loads(line, object_pairs_hook=collections.OrderedDict)
-  print(e)
+  #print(e)
   add_candidate_types_and_positions(e)
   annotation, annotated_idx, annotated_sa = get_first_annotation(e)
 
@@ -879,8 +879,9 @@ def read_nq_examples(input_file, is_training):
   for entry in input_data:
     examples.extend(read_nq_entry(entry, is_training))
   print("examples", examples)
+  e = examples[0]
+  print("NqExample", e.example_id, e.qas_id, e.questions, e.doc_tokens, e.doc_tokens_map, e.answer, e.start_position, e.end_position)
   return examples
-
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
                  use_one_hot_embeddings):
@@ -985,6 +986,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       else:
         tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
 
+    '''
     tf.logging.info("**** Trainable Variables ****")
     for var in tvars:
       init_string = ""
@@ -992,6 +994,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
         init_string = ", *INIT_FROM_CKPT*"
       tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
                       init_string)
+    '''
 
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -1054,7 +1057,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
 def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
-
+  print("input_fn_builder")
   name_to_features = {
       "unique_ids": tf.FixedLenFeature([], tf.int64),
       "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
@@ -1068,6 +1071,7 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
     name_to_features["answer_types"] = tf.FixedLenFeature([], tf.int64)
 
   def _decode_record(record, name_to_features):
+    print("_decode_record")
     """Decodes a record to a TensorFlow example."""
     example = tf.parse_single_example(record, name_to_features)
 
@@ -1084,6 +1088,7 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
     return example
 
   def input_fn(params):
+    print("input_fn")
     """The actual input function."""
     batch_size = params["batch_size"]
 
@@ -1217,7 +1222,7 @@ def compute_predictions(example):
   max_answer_length = 30
 
   for unique_id, result in example.results.items():
-    print("compute_predictions", unique_id, result)
+    #print("compute_predictions", unique_id, result)
     if unique_id not in example.features:
       raise ValueError("No feature found with unique_id:", unique_id)
     token_map = example.features[unique_id]["token_map"].int64_list.value
@@ -1255,37 +1260,40 @@ def compute_predictions(example):
         #print((score, summary, start_span, end_span))
 
   k = sorted(predictions, key=lambda x: x[0], reverse=True)
-  print(k)
-  score, summary, start_span, end_span = k[0]
-  short_span = Span(start_span, end_span)
-  long_span = Span(-1, -1)
-  for c in example.candidates:
-    start = short_span.start_token_idx
-    end = short_span.end_token_idx
-    if c["top_level"] and c["start_token"] <= start and c["end_token"] >= end:
-      long_span = Span(c["start_token"], c["end_token"])
-      break
+  #print(k)
+  summaries = []
+  for score, summary, start_span, end_span in k:
+    #score, summary, start_span, end_span = k[0]
+    short_span = Span(start_span, end_span)
+    long_span = Span(-1, -1)
+    for c in example.candidates:
+      start = short_span.start_token_idx
+      end = short_span.end_token_idx
+      if c["top_level"] and c["start_token"] <= start and c["end_token"] >= end:
+        long_span = Span(c["start_token"], c["end_token"])
+        break
 
-  summary.predicted_label = {
-      "example_id": example.example_id,
-      "long_answer": {
-          "start_token": long_span.start_token_idx,
-          "end_token": long_span.end_token_idx,
-          "start_byte": -1,
-          "end_byte": -1
-      },
-      "long_answer_score": score,
-      "short_answers": [{
-          "start_token": short_span.start_token_idx,
-          "end_token": short_span.end_token_idx,
-          "start_byte": -1,
-          "end_byte": -1
-      }],
-      "short_answers_score": score,
-      "yes_no_answer": "NONE"
-  }
-
-  return summary
+    summary.predicted_label = {
+        "example_id": example.example_id,
+        "long_answer": {
+            "start_token": long_span.start_token_idx,
+            "end_token": long_span.end_token_idx,
+            "start_byte": -1,
+            "end_byte": -1
+        },
+        "long_answer_score": score,
+        "short_answers": [{
+            "start_token": short_span.start_token_idx,
+            "end_token": short_span.end_token_idx,
+            "start_byte": -1,
+            "end_byte": -1
+        }],
+        "short_answers_score": score,
+        "yes_no_answer": "NONE"
+    }
+    #print(summary.predicted_label)
+    summaries.append(summary)
+  return summaries[0]
 
 
 def compute_pred_dict(candidates_dict, dev_features, raw_results):
@@ -1310,7 +1318,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
     feature_ids.append(f.features.feature["unique_ids"].int64_list.value[0] + 1)
     features.append(f.features.feature)
     print("feature_ids", f.features.feature["unique_ids"].int64_list.value[0] + 1)
-    print("features", f.features.feature)
+    #print("features", f.features.feature)
   feature_ids = tf.to_int32(np.array(feature_ids)).eval(session=sess)
   features_by_id = list(zip(feature_ids, features))
   # print("features_by_id", features_by_id)
@@ -1378,14 +1386,113 @@ def validate_flags_or_throw(bert_config):
         "(%d) + 3" % (FLAGS.max_seq_length, FLAGS.max_query_length))
 
 
+def predict(estimator, FLAGS):
+  tokenizer = tokenization.FullTokenizer(
+      vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
+  if not FLAGS.output_prediction_file:
+    raise ValueError(
+        "--output_prediction_file must be defined in predict mode.")
+
+  eval_examples = read_nq_examples(
+      input_file=FLAGS.predict_file, is_training=False)
+  eval_writer = FeatureWriter(
+      filename=os.path.join(FLAGS.output_dir, "eval.tf_record"),
+      is_training=False)
+  eval_features = []
+
+  def append_feature(feature):
+    eval_features.append(feature)
+    eval_writer.process_feature(feature)
+
+  num_spans_to_ids = convert_examples_to_features(
+      examples=eval_examples,
+      tokenizer=tokenizer,
+      is_training=False,
+      output_fn=append_feature)
+  eval_writer.close()
+  eval_filename = eval_writer.filename
+
+
+  print("eval_examples", len(eval_examples), type(eval_examples[0]))
+  print("eval_features0", len(eval_features), type(eval_features[0]))
+
+  #eval_features = eval_writer.examples
+  #print("eval_features1", len(eval_features), type(eval_features[0]))
+
+  tf.logging.info("***** Running predictions *****")
+  tf.logging.info("  Num orig examples = %d", len(eval_examples))
+  tf.logging.info("  Num split examples = %d", len(eval_features))
+  tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
+  for spans, ids in num_spans_to_ids.items():
+    tf.logging.info("  Num split into %d = %d", spans, len(ids))
+
+  predict_input_fn = input_fn_builder(
+      input_file=eval_filename,
+      seq_length=FLAGS.max_seq_length,
+      is_training=False,
+      drop_remainder=False)
+
+  # If running eval on the TPU, you will need to specify the number of steps.
+  all_results = []
+  for result in estimator.predict(
+      predict_input_fn, yield_single_examples=True):
+    #if len(all_results) % 1000 == 0:
+    tf.logging.info("Processing example: %d" % (len(all_results)))
+    unique_id = int(result["unique_ids"])
+    start_logits = [float(x) for x in result["start_logits"].flat]
+    end_logits = [float(x) for x in result["end_logits"].flat]
+    answer_type_logits = [float(x) for x in result["answer_type_logits"].flat]
+    with open('result_%s_%s.json' % (unique_id, len(all_results)), 'w') as f:
+      json.dump({'start_logits': start_logits, 'end_logits': end_logits, 'answer_type_logits': answer_type_logits}, f)
+    all_results.append(
+        RawResult(
+            unique_id=unique_id,
+            start_logits=start_logits,
+            end_logits=end_logits,
+            answer_type_logits=answer_type_logits))
+
+  candidates_dict = read_candidates(FLAGS.predict_file)
+  #for r in all_results:
+  #  print(r._asdict())
+
+  # COMMENT THIS OUT TO REUSE EVAL FEATURE
+  eval_features = [
+      tf.train.Example.FromString(r)
+      for r in tf.python_io.tf_record_iterator(eval_filename)
+  ]
+
+  print("eval_features2", len(eval_features), type(eval_features[0]))
+  nq_pred_dict = compute_pred_dict(candidates_dict, eval_features,
+                                    [r._asdict() for r in all_results])
+  predictions_json = {"predictions": list(nq_pred_dict.values())}
+  #with tf.gfile.Open(FLAGS.output_prediction_file, "w") as f:
+  #  json.dump(predictions_json, f, indent=4)
+
+  with open('custom.jsonl', 'r') as f:
+      data = json.load(f)
+
+  def get_answer(pred):
+      output = []
+      for i in range(pred['start_token'], pred['end_token']):
+          output.append(data['document_tokens'][i]['token'])
+      return " ".join(output)
+
+  predictions = predictions_json['predictions'][0]
+
+  print("Q:", data['question_text'])
+  print("A_S:", get_answer(predictions['short_answers'][0]))
+  print("A_L:", get_answer(predictions['long_answer']))
+
+from flask import Flask, request, jsonify, make_response, render_template
+from predict import convert_question_to_nqexample
 def main(_):
+  app = Flask(__name__)
+
   tf.logging.set_verbosity(tf.logging.INFO)
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
   validate_flags_or_throw(bert_config)
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
-  tokenizer = tokenization.FullTokenizer(
-      vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
 
   tpu_cluster_resolver = None
   if FLAGS.use_tpu and FLAGS.tpu_name:
@@ -1443,82 +1550,7 @@ def main(_):
     estimator.train(input_fn=train_input_fn, max_steps=num_train_steps)
 
   if FLAGS.do_predict:
-    if not FLAGS.output_prediction_file:
-      raise ValueError(
-          "--output_prediction_file must be defined in predict mode.")
-
-    eval_examples = read_nq_examples(
-        input_file=FLAGS.predict_file, is_training=False)
-    eval_writer = FeatureWriter(
-        filename=os.path.join(FLAGS.output_dir, "eval.tf_record"),
-        is_training=False)
-    eval_features = []
-
-    def append_feature(feature):
-      eval_features.append(feature)
-      eval_writer.process_feature(feature)
-
-    num_spans_to_ids = convert_examples_to_features(
-        examples=eval_examples,
-        tokenizer=tokenizer,
-        is_training=False,
-        output_fn=append_feature)
-    eval_writer.close()
-    eval_filename = eval_writer.filename
-
-
-
-    print("eval_features0", len(eval_features), type(eval_features[0]))
-
-    eval_features = eval_writer.examples
-    print("eval_features1", len(eval_features), type(eval_features[0]))
-
-    tf.logging.info("***** Running predictions *****")
-    tf.logging.info("  Num orig examples = %d", len(eval_examples))
-    tf.logging.info("  Num split examples = %d", len(eval_features))
-    tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
-    for spans, ids in num_spans_to_ids.items():
-      tf.logging.info("  Num split into %d = %d", spans, len(ids))
-
-    predict_input_fn = input_fn_builder(
-        input_file=eval_filename,
-        seq_length=FLAGS.max_seq_length,
-        is_training=False,
-        drop_remainder=False)
-
-    # If running eval on the TPU, you will need to specify the number of steps.
-    all_results = []
-    for result in estimator.predict(
-        predict_input_fn, yield_single_examples=True):
-      #if len(all_results) % 1000 == 0:
-      tf.logging.info("Processing example: %d" % (len(all_results)))
-      unique_id = int(result["unique_ids"])
-      start_logits = [float(x) for x in result["start_logits"].flat]
-      end_logits = [float(x) for x in result["end_logits"].flat]
-      answer_type_logits = [float(x) for x in result["answer_type_logits"].flat]
-      all_results.append(
-          RawResult(
-              unique_id=unique_id,
-              start_logits=start_logits,
-              end_logits=end_logits,
-              answer_type_logits=answer_type_logits))
-
-    candidates_dict = read_candidates(FLAGS.predict_file)
-    for r in all_results:
-      print(r._asdict())
-
-    '''
-    eval_features = [
-        tf.train.Example.FromString(r)
-        for r in tf.python_io.tf_record_iterator(eval_filename)
-    ]
-    '''
-    print("eval_features2", len(eval_features), type(eval_features[0]))
-    nq_pred_dict = compute_pred_dict(candidates_dict, eval_features,
-                                     [r._asdict() for r in all_results])
-    predictions_json = {"predictions": list(nq_pred_dict.values())}
-    with tf.gfile.Open(FLAGS.output_prediction_file, "w") as f:
-      json.dump(predictions_json, f, indent=4)
+    predict(estimator, FLAGS)
 
 
 if __name__ == "__main__":
