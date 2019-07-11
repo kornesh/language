@@ -33,6 +33,9 @@ import numpy as np
 import tensorflow as tf
 import sys
 
+from flask import Flask, request, jsonify, make_response, render_template
+from predict import generate_nq_jsonl
+
 flags = tf.flags
 FLAGS = flags.FLAGS
 
@@ -342,10 +345,10 @@ def candidates_iter(e):
     yield idx, c
 
 
-def create_example_from_jsonl(line):
+def create_example_from_jsonl(e):
   """Creates an NQ example from a given line of JSON."""
-  e = json.loads(line, object_pairs_hook=collections.OrderedDict)
-  #print(e)
+  #e = json.loads(line, object_pairs_hook=collections.OrderedDict)
+  print(e)
   add_candidate_types_and_positions(e)
   annotation, annotated_idx, annotated_sa = get_first_annotation(e)
 
@@ -872,12 +875,22 @@ def read_nq_examples(input_file, is_training):
     tf.logging.info("Reading: %s", path)
     with _open(path) as input_file:
       for line in input_file:
-        input_data.append(create_example_from_jsonl(line))
+        e = json.loads(line, object_pairs_hook=collections.OrderedDict)
+        input_data.append(create_example_from_jsonl(e))
         break
 
   examples = []
   for entry in input_data:
     examples.extend(read_nq_entry(entry, is_training))
+  print("examples", examples)
+  e = examples[0]
+  print("NqExample", e.example_id, e.qas_id, e.questions, e.doc_tokens, e.doc_tokens_map, e.answer, e.start_position, e.end_position)
+  return examples
+
+def read_nq_examples_from_jsonl(jsonl_od, is_training):
+  """Read a NQ jsonl OrderedDict into a list of NqExample."""
+  input_data = [(jsonl_od)]
+  examples = read_nq_entry(create_example_from_jsonl(jsonl_od), is_training)
   print("examples", examples)
   e = examples[0]
   print("NqExample", e.example_id, e.qas_id, e.questions, e.doc_tokens, e.doc_tokens_map, e.answer, e.start_position, e.end_position)
@@ -1202,6 +1215,9 @@ def read_candidates(input_pattern):
     final_dict.update(read_candidates_from_one_split(input_path))
   return final_dict
 
+def read_candidates_from_jsonl(jsonl_od):
+  candidates_dict = {jsonl_od["example_id"]: jsonl_od["long_answer_candidates"]}
+  return candidates_dict
 
 def get_best_indexes(logits, n_best_size):
   """Get the n-best logits from a list."""
@@ -1228,8 +1244,8 @@ def compute_predictions(example):
     token_map = example.features[unique_id]["token_map"].int64_list.value
     start_indexes = get_best_indexes(result["start_logits"], n_best_size)
     end_indexes = get_best_indexes(result["end_logits"], n_best_size)
-    print("start_indexes", start_indexes)
-    print("end_indexes", end_indexes)
+    #print("start_indexes", start_indexes)
+    #print("end_indexes", end_indexes)
     for start_index in start_indexes:
       for end_index in end_indexes:
         if end_index < start_index:
@@ -1254,9 +1270,9 @@ def compute_predictions(example):
         # Span logits minus the cls logits seems to be close to the best.
         score = summary.short_span_score - summary.cls_token_score
         predictions.append((score, summary, start_span, end_span))
-        print("\t\tstart_span", start_span)
-        print("\t\tend_span", end_span)
-        print("\t\tscore", score)
+        #print("\t\tstart_span", start_span)
+        #print("\t\tend_span", end_span)
+        #print("\t\tscore", score)
         #print((score, summary, start_span, end_span))
 
   k = sorted(predictions, key=lambda x: x[0], reverse=True)
@@ -1386,15 +1402,18 @@ def validate_flags_or_throw(bert_config):
         "(%d) + 3" % (FLAGS.max_seq_length, FLAGS.max_query_length))
 
 
-def predict(estimator, FLAGS):
+def predict(estimator, FLAGS, page, question):
   tokenizer = tokenization.FullTokenizer(
       vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
   if not FLAGS.output_prediction_file:
     raise ValueError(
         "--output_prediction_file must be defined in predict mode.")
 
-  eval_examples = read_nq_examples(
-      input_file=FLAGS.predict_file, is_training=False)
+  jsonl_od = generate_nq_jsonl(page, question)
+  print("jsonl_od", jsonl_od)
+  eval_examples = read_nq_examples_from_jsonl(jsonl_od=jsonl_od, is_training=False)
+  #eval_examples = read_nq_examples(input_file=FLAGS.predict_file, is_training=False)
+
   eval_writer = FeatureWriter(
       filename=os.path.join(FLAGS.output_dir, "eval.tf_record"),
       is_training=False)
@@ -1442,8 +1461,8 @@ def predict(estimator, FLAGS):
     start_logits = [float(x) for x in result["start_logits"].flat]
     end_logits = [float(x) for x in result["end_logits"].flat]
     answer_type_logits = [float(x) for x in result["answer_type_logits"].flat]
-    with open('result_%s_%s.json' % (unique_id, len(all_results)), 'w') as f:
-      json.dump({'start_logits': start_logits, 'end_logits': end_logits, 'answer_type_logits': answer_type_logits}, f)
+    #with open('result_%s_%s.json' % (unique_id, len(all_results)), 'w') as f:
+    #  json.dump({'start_logits': start_logits, 'end_logits': end_logits, 'answer_type_logits': answer_type_logits}, f)
     all_results.append(
         RawResult(
             unique_id=unique_id,
@@ -1451,7 +1470,8 @@ def predict(estimator, FLAGS):
             end_logits=end_logits,
             answer_type_logits=answer_type_logits))
 
-  candidates_dict = read_candidates(FLAGS.predict_file)
+  candidates_dict = read_candidates_from_jsonl(jsonl_od)
+  #candidates_dict = read_candidates(FLAGS.predict_file)
   #for r in all_results:
   #  print(r._asdict())
 
@@ -1468,23 +1488,20 @@ def predict(estimator, FLAGS):
   #with tf.gfile.Open(FLAGS.output_prediction_file, "w") as f:
   #  json.dump(predictions_json, f, indent=4)
 
-  with open('custom.jsonl', 'r') as f:
-      data = json.load(f)
-
   def get_answer(pred):
       output = []
       for i in range(pred['start_token'], pred['end_token']):
-          output.append(data['document_tokens'][i]['token'])
+          output.append(jsonl_od['document_tokens'][i]['token'])
       return " ".join(output)
 
   predictions = predictions_json['predictions'][0]
 
-  print("Q:", data['question_text'])
+  print("Q:", jsonl_od['question_text'])
   print("A_S:", get_answer(predictions['short_answers'][0]))
   print("A_L:", get_answer(predictions['long_answer']))
 
-from flask import Flask, request, jsonify, make_response, render_template
-from predict import convert_question_to_nqexample
+  return {'SA': get_answer(predictions['short_answers'][0]), 'LA': get_answer(predictions['long_answer'])}
+
 def main(_):
   app = Flask(__name__)
 
@@ -1548,10 +1565,35 @@ def main(_):
         is_training=True,
         drop_remainder=True)
     estimator.train(input_fn=train_input_fn, max_steps=num_train_steps)
-
+  '''
   if FLAGS.do_predict:
-    predict(estimator, FLAGS)
+    with open('natgeo_penguin.txt', 'r') as f:
+        page = f.read()
+    predict(estimator, FLAGS, page, "Where penguins live in winter")
+  sys.exit(1)
+  '''
+  '''
+  if FLAGS.do_predict:
+    with open('drone.txt', 'r') as f:
+        page = f.read()
+    predict(estimator, FLAGS, page, "What transmitter became the industry standard for drone racing?")
+  sys.exit(1)
+  '''
 
+  @app.route("/", methods=['GET', 'POST'])
+  def home():
+    results = {'error': 'nope'}
+    if request.get_json() is not None:
+      payload = request.get_json()
+      #data.encode('utf-8').decode('unicode_escape').replace('\xa0', '')
+      page = payload.get('page')
+      question = payload.get('question')
+      results = predict(estimator, FLAGS, page, question)
+    r = make_response(jsonify(results))
+    r.mimetype = 'application/json'
+    return r
+
+  app.run(debug=True, host='0.0.0.0', port=8888)
 
 if __name__ == "__main__":
   flags.mark_flag_as_required("vocab_file")

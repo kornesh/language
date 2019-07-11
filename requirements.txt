@@ -1,0 +1,2 @@
+bert-tensorflow==1.0.1
+tensorflow-estimator==1.14.0

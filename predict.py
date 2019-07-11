@@ -53,7 +53,7 @@ NQToken = collections.namedtuple(
         'end_byte'
     ])
 
-def generate_nq_jsonl(question, page):
+def generate_nq_jsonl(page, question):
     doctokens = nq_tokenizer(page)
     candidates = []
     stack = []
@@ -65,6 +65,9 @@ def generate_nq_jsonl(question, page):
                 continue
             if len(stack) != 0 and token == stack[-1][0]:
                 s  = stack.pop()
+                # if i - s[1] == 1:
+                #     print("skipping", s[0], t['token'], "start_token", s[1], "end_token", i, "top_level", not bool(stack), "stack", stack)
+                #     continue
                 candidates.append(collections.OrderedDict([
                     ("start_token", s[1]),
                     ("top_level", not bool(stack)),
@@ -94,7 +97,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--page',
         type=str,
-        help='Ppge filename')
+        help='Page filename')
     parser.add_argument(
         '--question',
         type=str,
@@ -107,9 +110,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     with open(args.page, 'r') as f:
-        text = f.read()
+        page = f.read()
 
-    data = generate_nq_jsonl(args.question, text)
-    print(data)
+    data = generate_nq_jsonl(page, args.question)
+    #print(data)
     with open(args.output, 'w') as f:
         json.dump(dict(data), f)
