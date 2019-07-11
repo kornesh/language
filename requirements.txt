@@ -1,2 +1,4 @@
 bert-tensorflow==1.0.1
 tensorflow-estimator==1.14.0
+gunicorn==19.9.0
+flask==1.1.0
