@@ -1579,10 +1579,10 @@ def main(_):
     predict(estimator, FLAGS, page, "What transmitter became the industry standard for drone racing?")
   sys.exit(1)
   '''
-
-  @app.route("/", methods=['GET', 'POST'])
+  @app.route('/', methods=['GET', 'POST'])
+  @app.route("/ml/", methods=['GET', 'POST'])
   def home():
-    results = {'error': 'nope'}
+    results = {'error': 'Expecting a POST request with `page` and `question`'}
     if request.get_json() is not None:
       payload = request.get_json()
       #data.encode('utf-8').decode('unicode_escape').replace('\xa0', '')
