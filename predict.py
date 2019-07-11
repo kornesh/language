@@ -65,9 +65,9 @@ def generate_nq_jsonl(page, question):
                 continue
             if len(stack) != 0 and token == stack[-1][0]:
                 s  = stack.pop()
-                # if i - s[1] == 1:
-                #     print("skipping", s[0], t['token'], "start_token", s[1], "end_token", i, "top_level", not bool(stack), "stack", stack)
-                #     continue
+                if i - s[1] == 1:
+                    print("skipping", s[0], t['token'], "start_token", s[1], "end_token", i, "top_level", not bool(stack), "stack", stack)
+                    continue
                 candidates.append(collections.OrderedDict([
                     ("start_token", s[1]),
                     ("top_level", not bool(stack)),
