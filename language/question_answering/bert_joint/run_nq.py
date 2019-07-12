@@ -33,7 +33,8 @@ import numpy as np
 import tensorflow as tf
 import sys
 
-from flask import Flask, request, jsonify, make_response, render_template
+from flask import Flask, request, jsonify, make_response, render_templat
+from flask_cors import CORS
 from predict import generate_nq_jsonl
 
 flags = tf.flags
@@ -1504,7 +1505,8 @@ def predict(estimator, FLAGS, page, question):
 
 def main(_):
   app = Flask(__name__)
-
+  CORS(app)
+  
   tf.logging.set_verbosity(tf.logging.INFO)
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
   validate_flags_or_throw(bert_config)
