@@ -36,6 +36,8 @@ import sys
 from flask import Flask, request, jsonify, make_response, render_template
 from flask_cors import CORS
 from predict import generate_nq_jsonl
+import markdown
+
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -1590,6 +1592,10 @@ def main(_):
       #data.encode('utf-8').decode('unicode_escape').replace('\xa0', '')
       page = payload.get('page')
       question = payload.get('question')
+
+      if '<p>' not in page:
+        page = markdown.markdown(page)
+
       results = predict(estimator, FLAGS, page, question)
     r = make_response(jsonify(results))
     r.mimetype = 'application/json'
