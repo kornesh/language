@@ -1168,7 +1168,7 @@ class FeatureWriter(object):
     self.filename = filename
     self.is_training = is_training
     self.num_features = 0
-    self._writer = tf.python_io.TFRecordWriter(filename)
+    #self._writer = tf.python_io.TFRecordWriter(filename)
     self.examples = []
     self.features = []
 
@@ -1203,10 +1203,11 @@ class FeatureWriter(object):
     self.features.append(feature)
     #print("tf_example", tf_example)
     print("tf_example", type(tf_example.SerializeToString()))
-    self._writer.write(tf_example.SerializeToString())
+    #self._writer.write(tf_example.SerializeToString())
 
   def close(self):
-    self._writer.close()
+    #self._writer.close()
+    pass
 
 
 Span = collections.namedtuple("Span", ["start_token_idx", "end_token_idx"])
