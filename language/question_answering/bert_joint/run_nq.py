@@ -351,7 +351,7 @@ def candidates_iter(e):
 def create_example_from_jsonl(e):
   """Creates an NQ example from a given line of JSON."""
   #e = json.loads(line, object_pairs_hook=collections.OrderedDict)
-  print(e)
+  #print(e)
   add_candidate_types_and_positions(e)
   annotation, annotated_idx, annotated_sa = get_first_annotation(e)
 
@@ -1090,17 +1090,18 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
     print("_decode_record")
     """Decodes a record to a TensorFlow example."""
     example = tf.parse_single_example(record, name_to_features)
-
-    print("parse_single_example", type(example))
+    print("record", record)
+    print("_decode_record", "record", type(record))
+    print("_decode_record", "tf.parse_single_example", type(example))
 
     # tf.Example only supports tf.int64, but the TPU only supports tf.int32.
     # So cast all int64 to int32.
     for name in list(example.keys()):
       t = example[name]
+      print("_decode_record", "key", name, "t", t)
       if t.dtype == tf.int64:
         t = tf.to_int32(t)
       example[name] = t
-
     return example
 
   def input_fn(params):
@@ -1120,7 +1121,36 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
             lambda record: _decode_record(record, name_to_features),
             batch_size=batch_size,
             drop_remainder=drop_remainder))
+    #tf.InteractiveSession()
+    #print(d)
+    return d
 
+  return input_fn
+
+def input_fn_builder_from_features(features, seq_length, is_training, drop_remainder):
+  """Creates an `input_fn` closure to be passed to TPUEstimator."""
+  print("input_fn_builder")
+
+  def input_fn(params):
+    print("input_fn")
+    """The actual input function."""
+    batch_size = params["batch_size"]
+
+    # Just to make it conform to the following shape
+    # <DatasetV1Adapter shapes: {input_ids: (?, 384), input_mask: (?, 384), segment_ids: (?, 384), unique_ids: (?,)}, types: {input_ids: tf.int32, input_mask: tf.int32, segment_ids: tf.int32, unique_ids: tf.int32}>
+    feature = {
+      "unique_ids": np.array([np.array([features.unique_id])]),
+      "input_ids": np.array([np.array([np.array(features.input_ids)])]),
+      "input_mask": np.array([np.array([np.array(features.input_mask)])]),
+      "segment_ids": np.array([np.array([np.array(features.segment_ids)])]),
+    }
+
+    for k in feature.keys():
+      print("from_feature", feature[k])
+
+    d = tf.data.Dataset.from_tensor_slices(feature)
+    #tf.InteractiveSession()
+    #print(d)
     return d
 
   return input_fn
@@ -1140,6 +1170,7 @@ class FeatureWriter(object):
     self.num_features = 0
     self._writer = tf.python_io.TFRecordWriter(filename)
     self.examples = []
+    self.features = []
 
   def process_feature(self, feature):
     """Write a InputFeature to the TFRecordWriter as a tf.train.Example."""
@@ -1156,6 +1187,7 @@ class FeatureWriter(object):
     features["input_mask"] = create_int_feature(feature.input_mask)
     features["segment_ids"] = create_int_feature(feature.segment_ids)
 
+
     if self.is_training:
       features["start_positions"] = create_int_feature([feature.start_position])
       features["end_positions"] = create_int_feature([feature.end_position])
@@ -1168,6 +1200,7 @@ class FeatureWriter(object):
 
     tf_example = tf.train.Example(features=tf.train.Features(feature=features))
     self.examples.append(tf_example)
+    self.features.append(feature)
     #print("tf_example", tf_example)
     print("tf_example", type(tf_example.SerializeToString()))
     self._writer.write(tf_example.SerializeToString())
@@ -1337,7 +1370,7 @@ def compute_pred_dict(candidates_dict, dev_features, raw_results):
     feature_ids.append(f.features.feature["unique_ids"].int64_list.value[0] + 1)
     features.append(f.features.feature)
     print("feature_ids", f.features.feature["unique_ids"].int64_list.value[0] + 1)
-    #print("features", f.features.feature)
+    print("features", type(f.features.feature), type(f.features.feature["unique_ids"]))
   feature_ids = tf.to_int32(np.array(feature_ids)).eval(session=sess)
   features_by_id = list(zip(feature_ids, features))
   # print("features_by_id", features_by_id)
@@ -1413,7 +1446,7 @@ def predict(estimator, FLAGS, page, question):
         "--output_prediction_file must be defined in predict mode.")
 
   jsonl_od = generate_nq_jsonl(page, question)
-  print("jsonl_od", jsonl_od)
+  #print("jsonl_od", jsonl_od)
   eval_examples = read_nq_examples_from_jsonl(jsonl_od=jsonl_od, is_training=False)
   #eval_examples = read_nq_examples(input_file=FLAGS.predict_file, is_training=False)
 
@@ -1447,12 +1480,18 @@ def predict(estimator, FLAGS, page, question):
   tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
   for spans, ids in num_spans_to_ids.items():
     tf.logging.info("  Num split into %d = %d", spans, len(ids))
+  # predict_input_fn = input_fn_builder(
+  #     input_file=eval_filename,
+  #     seq_length=FLAGS.max_seq_length,
+  #     is_training=False,
+  #     drop_remainder=False)
 
-  predict_input_fn = input_fn_builder(
-      input_file=eval_filename,
-      seq_length=FLAGS.max_seq_length,
-      is_training=False,
-      drop_remainder=False)
+  
+  predict_input_fn = input_fn_builder_from_features(
+    features=eval_writer.features[0],
+    seq_length=FLAGS.max_seq_length,
+    is_training=False,
+    drop_remainder=False)
 
   # If running eval on the TPU, you will need to specify the number of steps.
   all_results = []
