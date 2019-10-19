@@ -1519,10 +1519,10 @@ def predict(estimator, FLAGS, page, question):
   #  print(r._asdict())
 
   # COMMENT THIS OUT TO REUSE EVAL FEATURE
-  eval_features = [
-      tf.train.Example.FromString(r)
-      for r in tf.python_io.tf_record_iterator(eval_filename)
-  ]
+  # eval_features = [
+  #     tf.train.Example.FromString(r)
+  #     for r in tf.python_io.tf_record_iterator(eval_filename)
+  # ]
 
   print("eval_features2", len(eval_features), type(eval_features[0]))
   nq_pred_dict = compute_pred_dict(candidates_dict, eval_features,
