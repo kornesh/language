@@ -1472,8 +1472,8 @@ def predict(estimator, FLAGS, page, question):
   print("eval_examples", len(eval_examples), type(eval_examples[0]))
   print("eval_features0", len(eval_features), type(eval_features[0]))
 
-  #eval_features = eval_writer.examples
-  #print("eval_features1", len(eval_features), type(eval_features[0]))
+  eval_features = eval_writer.examples
+  print("eval_features1", len(eval_features), type(eval_features[0]))
 
   tf.logging.info("***** Running predictions *****")
   tf.logging.info("  Num orig examples = %d", len(eval_examples))
